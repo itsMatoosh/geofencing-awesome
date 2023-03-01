@@ -6,10 +6,12 @@ package io.flutter.plugins.geofencing
 
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.os.Handler
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.core.app.JobIntentService
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
@@ -38,10 +40,13 @@ class GeofencingService : MethodCallHandler, JobIntentService() {
     companion object {
         @JvmStatic
         private val TAG = "GeofencingService"
+
         @JvmStatic
         private val JOB_ID = UUID.randomUUID().mostSignificantBits.toInt()
+
         @JvmStatic
         private var sBackgroundFlutterEngine: FlutterEngine? = null
+
         @JvmStatic
         private val sServiceStarted = AtomicBoolean(false)
 
@@ -66,15 +71,17 @@ class GeofencingService : MethodCallHandler, JobIntentService() {
                 sBackgroundFlutterEngine = FlutterEngine(context)
 
                 val callbackHandle = context.getSharedPreferences(
-                        GeofencingPlugin.SHARED_PREFERENCES_KEY,
-                        Context.MODE_PRIVATE)
-                        .getLong(GeofencingPlugin.CALLBACK_DISPATCHER_HANDLE_KEY, 0)
+                    GeofencingPlugin.SHARED_PREFERENCES_KEY,
+                    Context.MODE_PRIVATE
+                )
+                    .getLong(GeofencingPlugin.CALLBACK_DISPATCHER_HANDLE_KEY, 0)
                 if (callbackHandle == 0L) {
                     Log.e(TAG, "Fatal: no callback registered")
                     return
                 }
 
-                val callbackInfo = FlutterCallbackInformation.lookupCallbackInformation(callbackHandle)
+                val callbackInfo =
+                    FlutterCallbackInformation.lookupCallbackInformation(callbackHandle)
                 if (callbackInfo == null) {
                     Log.e(TAG, "Fatal: failed to find callback")
                     return
@@ -90,13 +97,16 @@ class GeofencingService : MethodCallHandler, JobIntentService() {
                 IsolateHolderService.setBackgroundFlutterEngine(sBackgroundFlutterEngine)
             }
         }
-        mBackgroundChannel = MethodChannel(sBackgroundFlutterEngine!!.getDartExecutor().getBinaryMessenger(),
-                "plugins.flutter.io/geofencing_plugin_background")
+        mBackgroundChannel = MethodChannel(
+            sBackgroundFlutterEngine!!.getDartExecutor().getBinaryMessenger(),
+            "plugins.flutter.io/geofencing_plugin_background"
+        )
         mBackgroundChannel.setMethodCallHandler(this)
     }
 
-   override fun onMethodCall(call: MethodCall, result: Result) {
-       when(call.method) {
+    @RequiresApi(Build.VERSION_CODES.O)
+    override fun onMethodCall(call: MethodCall, result: Result) {
+        when (call.method) {
             "GeofencingService.initialized" -> {
                 synchronized(sServiceStarted) {
                     while (!queue.isEmpty()) {
@@ -124,8 +134,9 @@ class GeofencingService : MethodCallHandler, JobIntentService() {
     }
 
     override fun onHandleWork(intent: Intent) {
+        // parse geofencing event
         val callbackHandle = intent.getLongExtra(GeofencingPlugin.CALLBACK_HANDLE_KEY, 0)
-        val geofencingEvent = GeofencingEvent.fromIntent(intent)
+        val geofencingEvent = GeofencingEvent.fromIntent(intent) ?: return
         if (geofencingEvent.hasError()) {
             Log.e(TAG, "Geofencing error: ${geofencingEvent.errorCode}")
             return
@@ -136,17 +147,21 @@ class GeofencingService : MethodCallHandler, JobIntentService() {
 
         // Get the geofences that were triggered. A single event can trigger
         // multiple geofences.
-        val triggeringGeofences = geofencingEvent.triggeringGeofences.map {
+        val triggeringGeofences = geofencingEvent.triggeringGeofences?.map {
             it.requestId
-        }
+        } ?: return
 
-        val location = geofencingEvent.triggeringLocation
-        val locationList = listOf(location.latitude,
-                location.longitude)
-        val geofenceUpdateList = listOf(callbackHandle,
-                triggeringGeofences,
-                locationList,
-                geofenceTransition)
+        val location = geofencingEvent.triggeringLocation ?: return
+        val locationList = listOf(
+            location.latitude,
+            location.longitude
+        )
+        val geofenceUpdateList = listOf(
+            callbackHandle,
+            triggeringGeofences,
+            locationList,
+            geofenceTransition
+        )
 
         synchronized(sServiceStarted) {
             if (!sServiceStarted.get()) {
@@ -154,7 +169,12 @@ class GeofencingService : MethodCallHandler, JobIntentService() {
                 queue.add(geofenceUpdateList)
             } else {
                 // Callback method name is intentionally left blank.
-                Handler(mContext.mainLooper).post { mBackgroundChannel.invokeMethod("", geofenceUpdateList) }
+                Handler(mContext.mainLooper).post {
+                    mBackgroundChannel.invokeMethod(
+                        "",
+                        geofenceUpdateList
+                    )
+                }
             }
         }
     }

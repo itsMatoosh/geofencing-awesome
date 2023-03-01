@@ -9,20 +9,25 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import android.util.Log
+import androidx.annotation.RequiresApi
 import io.flutter.embedding.engine.FlutterEngine
 
 class IsolateHolderService : Service() {
     companion object {
         @JvmStatic
         val ACTION_SHUTDOWN = "SHUTDOWN"
+
         @JvmStatic
         private val WAKELOCK_TAG = "IsolateHolderService::WAKE_LOCK"
+
         @JvmStatic
         private val TAG = "IsolateHolderService"
+
         @JvmStatic
         private var sBackgroundFlutterEngine: FlutterEngine? = null
 
@@ -32,25 +37,30 @@ class IsolateHolderService : Service() {
         }
     }
 
-    override fun onBind(p0: Intent) : IBinder? {
+    override fun onBind(p0: Intent): IBinder? {
         return null;
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate() {
         super.onCreate()
         val CHANNEL_ID = "geofencing_plugin_channel"
-        val channel = NotificationChannel(CHANNEL_ID,
-                "Flutter Geofencing Plugin",
-                NotificationManager.IMPORTANCE_LOW)
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            "Flutter Geofencing Plugin",
+            NotificationManager.IMPORTANCE_LOW
+        )
         val imageId = getResources().getIdentifier("ic_launcher", "mipmap", getPackageName())
 
-        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)
+        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(
+            channel
+        )
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("Almost home!")
-                .setContentText("Within 1KM of home. Fine location tracking enabled.")
-                .setSmallIcon(imageId)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
-                .build()
+            .setContentTitle("Almost home!")
+            .setContentText("Within 1KM of home. Fine location tracking enabled.")
+            .setSmallIcon(imageId)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .build()
 
         (getSystemService(Context.POWER_SERVICE) as PowerManager).run {
             newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKELOCK_TAG).apply {
@@ -61,7 +71,7 @@ class IsolateHolderService : Service() {
         startForeground(1, notification)
     }
 
-    override fun onStartCommand(intent: Intent, flags: Int, startId: Int) : Int {
+    override fun onStartCommand(intent: Intent, flags: Int, startId: Int): Int {
         if (intent.getAction() == ACTION_SHUTDOWN) {
             (getSystemService(Context.POWER_SERVICE) as PowerManager).run {
                 newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKELOCK_TAG).apply {
